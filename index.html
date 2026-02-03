@@ -1,0 +1,1233 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>學園寶可夢：暢行無阻版 (Ver 18.15)</title>
+    
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
+
+    <style>
+        body {
+            font-family: 'Press Start 2P', cursive;
+            background-color: #2d3436;
+            color: white;
+            overflow: hidden;
+            touch-action: manipulation;
+            user-select: none;
+            -webkit-user-select: none;
+        }
+
+        .text-math { color: #fdcb6e; } .text-sci { color: #00b894; } .text-lit { color: #a29bfe; }  
+
+        @keyframes shake {
+            0%, 100% { transform: translateX(0); }
+            20%, 60% { transform: translateX(-6px) rotate(-1deg); }
+            40%, 80% { transform: translateX(6px) rotate(1deg); }
+        }
+        .shake-effect { animation: shake 0.4s cubic-bezier(.36,.07,.19,.97) both; }
+
+        @keyframes floatUp {
+            0% { transform: translateY(0) scale(1); opacity: 1; }
+            100% { transform: translateY(-40px) scale(1.5); opacity: 0; }
+        }
+        .damage-text { animation: floatUp 0.8s ease-out forwards; }
+
+        @keyframes flashRed {
+            0% { filter: sepia(1) hue-rotate(-50deg) saturate(5); }
+            50% { filter: sepia(1) hue-rotate(-50deg) saturate(5); }
+            100% { filter: none; }
+        }
+        .hit-flash { animation: flashRed 0.3s; }
+
+        @keyframes throwBall {
+            0% { transform: scale(0.5) translate(0, 0); opacity: 0; }
+            10% { opacity: 1; }
+            50% { transform: scale(1.2) translate(100px, -150px); }
+            100% { transform: scale(1) translate(200px, -50px); }
+        }
+        .ball-throw { animation: throwBall 0.8s ease-in-out forwards; }
+
+        @keyframes bossAnim {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.1); }
+        }
+        .boss-anim { animation: bossAnim 2s infinite ease-in-out; }
+        
+        @keyframes shieldPulse {
+            0% { opacity: 0.3; transform: scale(1); }
+            50% { opacity: 0.6; transform: scale(1.1); }
+            100% { opacity: 0.3; transform: scale(1); }
+        }
+        .defense-shield { animation: shieldPulse 1s infinite; }
+
+        .bg-stripes {
+            background: repeating-linear-gradient(45deg, rgba(0,0,0,0.05), rgba(0,0,0,0.05) 10px, rgba(0,0,0,0.1) 10px, rgba(0,0,0,0.1) 20px);
+        }
+        
+        @keyframes pulse-border { 0% { border-color: white; } 50% { border-color: #fdcb6e; } 100% { border-color: white; } }
+        
+        .skill-beam { animation: beamFlash 0.5s; }
+        @keyframes beamFlash { 0% { width: 0; opacity: 1; } 100% { width: 100%; opacity: 0; } }
+
+        .skill-ink { opacity: 0; animation: inkSplash 1s forwards; }
+        @keyframes inkSplash { 0% { transform: scale(0); opacity: 1; } 50% { transform: scale(1.2); } 100% { transform: scale(1); opacity: 0.8; } }
+        
+        .skill-explosion { animation: explode 0.5s forwards; }
+        @keyframes explode { 0% { transform: scale(0); opacity: 1; } 100% { transform: scale(2); opacity: 0; } }
+
+        .skill-charge { animation: chargeGlow 0.8s forwards; }
+        @keyframes chargeGlow { 0% { opacity: 0; transform: scale(0.8); } 50% { opacity: 1; box-shadow: 0 0 30px #fdcb6e; } 100% { opacity: 0; transform: scale(1.2); } }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useEffect, useCallback, useMemo, useRef } = React;
+
+        // ==========================================
+        // 1. 基礎系統
+        // ==========================================
+
+        const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        const playTone = (freq, type, duration, vol = 0.1) => {
+            if (audioCtx.state === 'suspended') audioCtx.resume();
+            const osc = audioCtx.createOscillator();
+            const gain = audioCtx.createGain();
+            osc.type = type;
+            osc.frequency.setValueAtTime(freq, audioCtx.currentTime);
+            gain.gain.setValueAtTime(vol, audioCtx.currentTime);
+            gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + duration);
+            osc.connect(gain);
+            gain.connect(audioCtx.destination);
+            osc.start();
+            osc.stop(audioCtx.currentTime + duration);
+        };
+
+        const SFX = {
+            ATTACK: () => playTone(150, 'square', 0.1, 0.2),
+            SKILL: () => { playTone(100, 'sawtooth', 0.1, 0.2); setTimeout(() => playTone(50, 'square', 0.4, 0.3), 300); },
+            HIT: () => playTone(100, 'sawtooth', 0.3, 0.3),
+            SELECT: () => playTone(440, 'sine', 0.1, 0.1),
+            WIN: () => { playTone(523.25, 'square', 0.1); setTimeout(() => playTone(659.25, 'square', 0.1), 100); setTimeout(() => playTone(783.99, 'square', 0.2), 200); },
+            LOSE: () => { playTone(300, 'sawtooth', 0.5); setTimeout(() => playTone(250, 'sawtooth', 0.5), 400); },
+            CORRECT: () => { playTone(880, 'sine', 0.1); setTimeout(() => playTone(1760, 'sine', 0.2), 100); },
+            WRONG: () => playTone(150, 'sawtooth', 0.5),
+            THROW: () => playTone(600, 'triangle', 0.2),
+            CAUGHT: () => { playTone(1200, 'sine', 0.1); setTimeout(() => playTone(1500, 'sine', 0.2), 200); },
+            SWITCH: () => { playTone(600, 'square', 0.1); setTimeout(() => playTone(900, 'square', 0.1), 100); },
+            BUY: () => { playTone(1000, 'sine', 0.1); setTimeout(() => playTone(2000, 'sine', 0.1), 100); },
+            BOSS_ENTER: () => { playTone(100, 'sawtooth', 1.0); setTimeout(() => playTone(80, 'sawtooth', 1.0), 500); },
+            ERROR: () => playTone(100, 'sawtooth', 0.2, 0.2),
+            CHARGE: () => { playTone(300, 'sine', 0.1); setTimeout(() => playTone(400, 'sine', 0.1), 100); setTimeout(() => playTone(600, 'sine', 0.3), 200); },
+            DEFEND: () => playTone(200, 'square', 0.2, 0.2),
+            CHEST: () => { playTone(800, 'square', 0.1); setTimeout(() => playTone(1200, 'square', 0.3), 100); },
+            HEAL: () => { playTone(400, 'sine', 0.1); setTimeout(() => playTone(600, 'sine', 0.2), 200); }
+        };
+
+        const MAP_WIDTH = 10;
+        const MAP_HEIGHT = 8;
+        const MAX_BP = 5;
+        const ENCOUNTER_RATE = 0.15;
+
+        const COLORS = { 
+            black: '#2d3436', white: '#dfe6e9', sci: '#00b894', math: '#fdcb6e', lit: '#a29bfe', 
+            red: '#d63031', blue: '#0984e3', wall: '#636e72', 
+            bg_wood: '#e1b12c', bg_dark_wood: '#b78e22', bg_stone: '#607d8b', bg_lab: '#74b9ff'
+        };
+        const TYPE_ADVANTAGE = { 'math': 'sci', 'sci': 'lit', 'lit': 'math' };
+
+        // --- 全新語文題庫 ---
+        const CHINESE_WORDS = ['暴躁', '融洽', '儀態', '冷靜', '一聲不響', '興致'];
+        const CHINESE_QUESTIONS = [
+            { q: "班上的同學相處______，十分友愛。", a: "融洽" },
+            { q: "參加宴會時，我們______要得體，不可失禮。", a: "儀態" },
+            { q: "遇到火警時，我們要保持______，盡快離開現場。", a: "冷靜" },
+            { q: "他整天______，埋頭做自己的事情。", a: "一聲不響" },
+            { q: "這人性情______，願意和他交往的人很少。", a: "暴躁" },
+            { q: "你這______的脾氣非改不可。", a: "暴躁" },
+            { q: "在郊外迷路時，我們也要保持______。", a: "冷靜" },
+            { q: "出席大場合時，應注意______，千萬不要竊竊私語。", a: "儀態" },
+            { q: "幾個男孩在烈日下______勃勃地踢球。", a: "興致" }
+        ];
+
+        // --- 核心邏輯：題目生成 ---
+        const generateQuestion = (stage) => {
+            const item = CHINESE_QUESTIONS[Math.floor(Math.random() * CHINESE_QUESTIONS.length)];
+            
+            // 第三關及以上：供詞填充 (Text Input)
+            if (stage >= 3) {
+                return {
+                    q: item.q,
+                    type: 'input', // 新增輸入類型
+                    correctVal: item.a,
+                    options: [] // 不需要選項
+                };
+            }
+
+            // 第一關 3選1，第二關 4選1
+            const numOptions = stage === 1 ? 3 : 4;
+            let options = [item.a];
+            
+            // 隨機填充錯誤選項
+            let safety = 0;
+            while (options.length < numOptions && safety < 50) {
+                safety++;
+                const wrong = CHINESE_WORDS[Math.floor(Math.random() * CHINESE_WORDS.length)];
+                if (!options.includes(wrong)) {
+                    options.push(wrong);
+                }
+            }
+            // Shuffle options
+            options = options.sort(() => Math.random() - 0.5);
+            
+            return {
+                q: item.q,
+                type: 'choice',
+                options: options,
+                ans: options.indexOf(item.a),
+                correctVal: item.a
+            };
+        };
+
+        const STARTERS = [
+            { id: 'lit', name: '墨點點', type: 'lit', color: COLORS.lit, desc: '語文系', skill: '萬言書', skillDesc: '傷害+吸血', passive: '博學' },
+            { id: 'math', name: '三角獸', type: 'math', color: COLORS.math, desc: '數學系', skill: '絕對解', skillDesc: '超大傷害', passive: '精算' },
+            { id: 'sci', name: '燒杯怪', type: 'sci', color: COLORS.sci, desc: '科學系', skill: '元素崩壞', skillDesc: '傷害+麻痺', passive: '中和' },
+        ];
+
+        const MONSTERS = [
+            { id: 'slime', name: '加法史萊姆', type: 'math', hpBase: 15, exp: 20, minLv: 1, color: COLORS.math },
+            { id: 'bug', name: '標點蟲', type: 'lit', hpBase: 12, exp: 25, minLv: 1, color: COLORS.lit },
+            { id: 'tube', name: '試管怪', type: 'sci', hpBase: 18, exp: 30, minLv: 1, color: COLORS.sci },
+            { id: 'ruler', name: '三角板怪', type: 'math', hpBase: 28, exp: 45, minLv: 3, color: COLORS.math },
+            { id: 'book', name: '字典怪', type: 'lit', hpBase: 25, exp: 50, minLv: 3, color: COLORS.lit },
+            { id: 'planet', name: '行星怪', type: 'sci', hpBase: 30, exp: 55, minLv: 3, color: COLORS.sci },
+            { id: 'xman', name: '代數怪', type: 'math', hpBase: 38, exp: 70, minLv: 5, color: COLORS.math },
+            { id: 'quill', name: '羽毛筆爵士', type: 'lit', hpBase: 35, exp: 75, minLv: 5, color: COLORS.lit },
+            { id: 'volt', name: '雷電球', type: 'sci', hpBase: 42, exp: 80, minLv: 5, color: COLORS.sci },
+            { id: 'sigma', name: '總和機器人', type: 'math', hpBase: 55, exp: 100, minLv: 7, color: COLORS.math },
+            { id: 'inksquid', name: '墨水烏賊', type: 'lit', hpBase: 50, exp: 105, minLv: 7, color: COLORS.lit },
+            { id: 'atom', name: '原子怪', type: 'sci', hpBase: 60, exp: 110, minLv: 7, color: COLORS.sci },
+        ];
+
+        const BOSS = { id: 'exam_demon', name: '考卷魔王', type: 'math', hpBase: 150, exp: 500, color: COLORS.red, isBoss: true };
+
+        // 移除所有 3 (Desk) 和 4 (Chair)，保留 5 (Chest)
+        const LEVEL_MAPS = {
+            1: [ [1,1,1,1,1,1,1,1,1,1], [1,0,0,0,0,0,0,0,0,1], [1,0,5,0,0,0,0,0,0,1], [1,0,0,0,0,0,0,0,0,1], [1,0,0,0,0,0,0,0,5,1], [1,0,0,0,0,0,0,0,0,1], [1,1,1,1,1,0,0,2,1,1], [1,1,1,1,1,1,1,1,1,1] ],
+            2: [ [1,1,1,1,1,1,1,1,1,1], [1,9,0,0,1,5,0,0,2,1], [1,1,1,0,1,0,1,1,1,1], [1,0,0,0,0,0,0,0,0,1], [1,0,1,1,1,1,1,0,0,1], [1,0,0,0,0,0,0,0,5,1], [1,0,1,1,0,1,1,1,0,1], [1,1,1,1,1,1,1,1,1,1] ],
+            3: [ [1,1,1,1,1,1,1,1,1,1], [1,9,0,0,0,1,2,0,0,1], [1,1,1,1,0,1,1,1,0,1], [1,0,0,0,0,0,0,1,5,1], [1,0,1,1,1,1,0,1,0,1], [1,5,1,0,0,1,0,0,0,1], [1,0,0,0,0,1,1,1,1,1], [1,1,1,1,1,1,1,1,1,1] ],
+            4: [ [1,1,1,1,1,1,1,1,1,1], [1,9,0,0,0,1,0,0,2,1], [1,1,1,1,0,1,0,0,0,1], [1,0,0,5,0,0,0,1,0,1], [1,0,1,1,1,1,0,1,0,1], [1,0,0,0,0,1,0,0,5,1], [1,1,1,0,0,1,1,1,1,1], [1,1,1,1,1,1,1,1,1,1] ]
+        };
+
+        const LEVEL_INFO = {
+            1: { name: '初級語文教室 (3選1)', bg: COLORS.bg_wood },
+            2: { name: '中級語文教室 (4選1)', bg: COLORS.bg_dark_wood },
+            3: { name: '高級語文教室 (填充)', bg: COLORS.bg_stone },
+            4: { name: '魔王試煉場 (填充)', bg: COLORS.bg_lab },
+        };
+
+        // ==========================================
+        // 2. 視圖組件 (SVG & UI)
+        // ==========================================
+
+        const BallSprite = () => ( <svg viewBox="0 0 16 16" width="24" height="24"><circle cx="8" cy="8" r="7" fill="#d63031" stroke="black" strokeWidth="1" /><path d="M1,8 L15,8" stroke="black" strokeWidth="1.5" /><circle cx="8" cy="8" r="2" fill="white" stroke="black" strokeWidth="1" /><path d="M1,8 A7,7 0 0,0 15,8" fill="white" /></svg> );
+        const JuiceSprite = () => ( <svg viewBox="0 0 16 16" width="24" height="24"><rect x="5" y="4" width="6" height="10" fill="#ff9f43" stroke="black" strokeWidth="0.5"/><rect x="6" y="6" width="4" height="6" fill="white" opacity="0.3"/><line x1="8" y1="4" x2="10" y2="1" stroke="white" strokeWidth="1"/></svg> );
+        const StickerSprite = () => ( <svg viewBox="0 0 16 16" width="16" height="16"><circle cx="8" cy="8" r="6" fill="#f1c40f" stroke="black" strokeWidth="1"/><text x="8" y="11" fontSize="8" textAnchor="middle" fill="black">★</text></svg> );
+        const PlayerSprite = () => ( <svg viewBox="0 0 16 16" shapeRendering="crispEdges" className="w-full h-full"><rect x="4" y="14" width="8" height="2" fill="rgba(0,0,0,0.3)" /><rect x="5" y="12" width="2" height="3" fill="#2d3436" /><rect x="9" y="12" width="2" height="3" fill="#2d3436" /><rect x="4" y="14" width="3" height="1" fill="#95a5a6" /><rect x="9" y="14" width="3" height="1" fill="#95a5a6" /><rect x="4" y="8" width="8" height="4" fill="#3498db" /><rect x="7" y="8" width="2" height="2" fill="white" /><rect x="7" y="9" width="2" height="1" fill="#e74c3c" /><rect x="3" y="8" width="1" height="3" fill="#2980b9" /><rect x="12" y="8" width="1" height="3" fill="#2980b9" /><rect x="3" y="11" width="1" height="1" fill="#ffeaa7" /><rect x="12" y="11" width="1" height="1" fill="#ffeaa7" /><rect x="4" y="3" width="8" height="5" fill="#ffeaa7" /><rect x="5" y="5" width="2" height="2" fill="#2d3436" /><rect x="9" y="5" width="2" height="2" fill="#2d3436" /><rect x="6" y="5" width="1" height="1" fill="white" /><rect x="10" y="5" width="1" height="1" fill="white" /><path d="M4,2 h8 v2 h-8 z" fill="#e74c3c" /><path d="M5,1 h6 v1 h-6 z" fill="#c0392b" /><rect x="3" y="3" width="10" height="1" fill="#e74c3c" /><rect x="5" y="8" width="1" height="4" fill="#e17055" /><rect x="10" y="8" width="1" height="4" fill="#e17055" /></svg> );
+        const StarterSprite = ({ id, hit }) => { const className = hit ? "hit-flash" : "animate-bounce"; if (id === 'math') return ( <svg viewBox="0 0 32 32" className={className}><path d="M16,4 L4,26 L28,26 Z" fill={COLORS.math} stroke="black" strokeWidth="1" /><circle cx="16" cy="18" r="3" fill={COLORS.red} /><circle cx="16" cy="18" r="1" fill="white" /></svg> ); if (id === 'lit') return ( <svg viewBox="0 0 32 32" className={className}><path d="M10,20 Q6,20 6,14 Q6,8 16,6 Q26,8 26,14 Q26,20 22,20 L24,24 L16,28 L8,24 Z" fill={COLORS.lit} /><circle cx="12" cy="14" r="2" fill="white" /> <circle cx="20" cy="14" r="2" fill="white" /></svg> ); if (id === 'sci') return ( <svg viewBox="0 0 32 32" className={className}><path d="M8,8 L8,26 Q8,30 16,30 Q24,30 24,26 L24,8" fill="none" stroke="#a29bfe" strokeWidth="2" /><path d="M9,16 Q16,14 23,16 L23,26 Q23,29 16,29 Q9,29 9,26 Z" fill={COLORS.sci} opacity="0.8" /><rect x="11" y="18" width="2" height="4" fill="black" /> <rect x="19" y="18" width="2" height="4" fill="black" /></svg> ); return null; };
+        // 視覺優化：開啟的寶箱半透明
+        const ChestSprite = ({ open }) => ( <svg viewBox="0 0 16 16" width="100%" height="100%" style={{opacity: open ? 0.5 : 1}}><rect x="2" y="5" width="12" height="9" rx="1" fill={open ? "#8d6e63" : "#ffc107"} stroke="black" strokeWidth="1"/><path d="M2,8 L14,8" stroke="black" strokeWidth="1"/><rect x="7" y="7" width="2" height="2" fill={open ? "black" : "#ff5722"} stroke="black" strokeWidth="0.5"/><circle cx="8" cy="8" r="0.5" fill="black" />{open && <path d="M2,5 L14,5 L12,2 L4,2 Z" fill="#6d4c41" stroke="black" strokeWidth="1" />} </svg> );
+
+        const MonsterSprite = ({ id, type, hit }) => { 
+            const className = hit ? "hit-flash" : "animate-bounce";
+            if (id === 'exam_demon') return ( <svg viewBox="0 0 32 32" className={hit ? "hit-flash" : "boss-anim"}><rect x="6" y="4" width="20" height="24" fill="#f5f6fa" stroke="black" strokeWidth="1" /><line x1="8" y1="8" x2="24" y2="8" stroke="black" strokeWidth="1" /><line x1="8" y1="12" x2="24" y2="12" stroke="black" strokeWidth="1" /><line x1="8" y1="16" x2="24" y2="16" stroke="black" strokeWidth="1" /><circle cx="12" cy="20" r="2" fill="red" /><circle cx="20" cy="20" r="2" fill="red" /><path d="M10,24 Q16,28 22,24" stroke="black" strokeWidth="1" fill="none" /><text x="24" y="28" fontSize="12" fill="red" fontWeight="bold" transform="rotate(-20 24 28)">F</text></svg> );
+            if (id === 'slime') return ( <svg viewBox="0 0 16 16" className={className}><path d="M4,12 L12,12 L13,10 L13,6 L11,4 L5,4 L3,6 L3,10 Z" fill={COLORS.math} stroke="black" strokeWidth="0.5"/><rect x="7" y="6" width="2" height="6" fill="white" /><rect x="5" y="8" width="6" height="2" fill="white" /></svg> ); 
+            if (id === 'bug') return ( <svg viewBox="0 0 16 16" className={className}><circle cx="8" cy="8" r="4" fill={COLORS.lit} stroke="black" strokeWidth="0.5" /><path d="M8,12 Q6,14 4,13" stroke={COLORS.lit} strokeWidth="2" fill="none" /><circle cx="6" cy="7" r="1" fill="white" /><circle cx="10" cy="7" r="1" fill="white" /></svg> ); 
+            if (id === 'tube') return ( <svg viewBox="0 0 16 16" className={className}><rect x="6" y="4" width="4" height="10" rx="1" fill={COLORS.sci} stroke="black" strokeWidth="0.5" /><rect x="5" y="3" width="6" height="1" fill="#ccc" /><circle cx="7" cy="10" r="1" fill="white" className="animate-ping" /></svg> ); 
+            if (id === 'ruler') return ( <svg viewBox="0 0 16 16" className={className}><path d="M3,14 L8,4 L13,14 Z" fill={COLORS.math} stroke="black" strokeWidth="0.5" /><rect x="7" y="10" width="2" height="1" fill="black" /><circle cx="8" cy="8" r="1" fill="white" /><path d="M4,13 L12,13" stroke="black" strokeWidth="0.5" strokeDasharray="1,1" /></svg> );
+            if (id === 'book') return ( <svg viewBox="0 0 16 16" className={className}><rect x="4" y="3" width="8" height="10" rx="1" fill={COLORS.lit} stroke="black" strokeWidth="0.5" /><rect x="5" y="4" width="6" height="8" fill="white" /><line x1="6" y1="6" x2="10" y2="6" stroke="black" width="0.5" /><line x1="6" y1="8" x2="10" y2="8" stroke="black" width="0.5" /><circle cx="6" cy="10" r="0.5" fill="black" /><circle cx="10" cy="10" r="0.5" fill="black" /></svg> );
+            if (id === 'planet') return ( <svg viewBox="0 0 16 16" className={className}><circle cx="8" cy="8" r="4" fill={COLORS.sci} stroke="black" strokeWidth="0.5" /><ellipse cx="8" cy="8" rx="7" ry="2" fill="none" stroke={COLORS.sci} strokeWidth="1" transform="rotate(-20 8 8)" /><circle cx="6" cy="7" r="0.5" fill="white" /><circle cx="9" cy="7" r="0.5" fill="white" /></svg> );
+            if (id === 'xman') return ( <svg viewBox="0 0 16 16" className={className}><path d="M4,4 L12,12 M12,4 L4,12" stroke={COLORS.math} strokeWidth="3" strokeLinecap="round" /><circle cx="8" cy="8" r="1" fill="black" /></svg> );
+            if (id === 'quill') return ( <svg viewBox="0 0 16 16" className={className}><path d="M8,2 Q10,4 10,8 L8,14 L6,8 Q6,4 8,2" fill={COLORS.lit} stroke="black" strokeWidth="0.5"/><line x1="8" y1="2" x2="8" y2="14" stroke="white" strokeWidth="0.5" /></svg> );
+            if (id === 'volt') return ( <svg viewBox="0 0 16 16" className={className}><circle cx="8" cy="8" r="5" fill={COLORS.sci} stroke="black" strokeWidth="0.5"/><path d="M8,3 L9,7 L12,7 L7,13 L8,9 L5,9 Z" fill="yellow" stroke="black" strokeWidth="0.5" /></svg> );
+            if (id === 'sigma') return ( <svg viewBox="0 0 16 16" className={className}><path d="M4,4 L12,4 L8,8 L12,12 L4,12" fill="none" stroke={COLORS.math} strokeWidth="2" /><circle cx="6" cy="6" r="1" fill="red" /><rect x="10" y="10" width="2" height="2" fill="red" /></svg> );
+            if (id === 'inksquid') return ( <svg viewBox="0 0 16 16" className={className}><path d="M8,2 Q12,2 12,6 L12,10 Q12,12 8,12 Q4,12 4,10 L4,6 Q4,2 8,2" fill={COLORS.lit} /><path d="M5,12 Q4,15 2,14 M7,12 Q7,15 6,14 M9,12 Q9,15 10,14 M11,12 Q12,15 14,14" stroke={COLORS.lit} strokeWidth="1" fill="none" /><circle cx="6" cy="6" r="1" fill="white" /><circle cx="10" cy="6" r="1" fill="white" /></svg> );
+            if (id === 'atom') return ( <svg viewBox="0 0 16 16" className={className}><circle cx="8" cy="8" r="2" fill={COLORS.sci} /><ellipse cx="8" cy="8" rx="6" ry="2" stroke={COLORS.sci} strokeWidth="0.5" fill="none" transform="rotate(45 8 8)" /><ellipse cx="8" cy="8" rx="6" ry="2" stroke={COLORS.sci} strokeWidth="0.5" fill="none" transform="rotate(-45 8 8)" /><circle cx="12" cy="4" r="1" fill="yellow" className="animate-ping" /></svg> );
+            return null; 
+        };
+        const FloatingText = ({ text, x, y, color }) => ( <div className="damage-text absolute font-bold text-xl drop-shadow-md z-50 pointer-events-none" style={{ left: x, top: y, color }}>{text}</div> );
+
+        const SkillEffect = ({ type }) => {
+            if (type === 'math') return <div className="absolute top-1/2 left-0 h-16 w-full bg-blue-400 border-y-8 border-white skill-beam z-30 mix-blend-screen shadow-[0_0_20px_rgba(59,130,246,0.9)] opacity-90"></div>;
+            if (type === 'lit') return ( <div className="absolute inset-0 flex items-center justify-center z-30 pointer-events-none"><div className="text-8xl skill-ink text-black font-black drop-shadow-lg">無</div><div className="absolute text-8xl skill-ink text-black font-black drop-shadow-lg" style={{animationDelay: '0.1s', top: '10%', left: '10%'}}>極</div><div className="absolute text-8xl skill-ink text-black font-black drop-shadow-lg" style={{animationDelay: '0.2s', bottom: '10%', right: '10%'}}>書</div></div> );
+            if (type === 'sci') return ( <div className="absolute inset-0 flex items-center justify-center z-30 pointer-events-none"><div className="w-48 h-48 bg-green-500 rounded-full skill-explosion opacity-80 mix-blend-screen filter blur-md"></div><div className="absolute w-32 h-32 bg-yellow-400 rounded-full skill-explosion opacity-80 mix-blend-screen filter blur-md" style={{animationDelay: '0.1s'}}></div></div> );
+            if (type === 'charge') return <div className="absolute inset-0 flex items-center justify-center z-30 pointer-events-none"><div className="w-32 h-32 bg-yellow-400 rounded-full skill-charge opacity-50 mix-blend-screen filter blur-md"></div></div>;
+            return null;
+        };
+
+        const DashboardModal = ({ onClose, stats, level, caughtCount }) => (
+            <div className="absolute inset-0 bg-black/90 z-50 flex items-center justify-center p-4">
+                <div className="bg-white text-black p-6 rounded-lg border-4 border-blue-500 w-full max-w-sm text-center font-sans relative" style={{fontFamily: "'Press Start 2P', cursive"}}>
+                    <h2 className="text-xl mb-6 text-blue-600 font-bold">📊 學習儀表板</h2>
+                    
+                    <div className="grid grid-cols-2 gap-4 mb-6 text-sm">
+                        <div className="bg-gray-100 p-3 rounded">
+                            <div className="text-gray-500 mb-1">答題總數</div>
+                            <div className="text-xl">{stats.totalQuestions}</div>
+                        </div>
+                        <div className="bg-gray-100 p-3 rounded">
+                            <div className="text-gray-500 mb-1">答對題數</div>
+                            <div className="text-xl text-green-600">{stats.correctAnswers}</div>
+                        </div>
+                        <div className="col-span-2 bg-gray-100 p-3 rounded">
+                            <div className="text-gray-500 mb-1">正確率</div>
+                            <div className="text-2xl text-blue-600">
+                                {stats.totalQuestions > 0 
+                                    ? Math.round((stats.correctAnswers / stats.totalQuestions) * 100) 
+                                    : 0}%
+                            </div>
+                        </div>
+                        <div className="bg-yellow-50 p-3 rounded border border-yellow-200">
+                            <div className="text-gray-500 mb-1">目前等級</div>
+                            <div className="text-lg">Lv.{level}</div>
+                        </div>
+                        <div className="bg-purple-50 p-3 rounded border border-purple-200">
+                            <div className="text-gray-500 mb-1">圖鑑收集</div>
+                            <div className="text-lg">{caughtCount} / {MONSTERS.length}</div>
+                        </div>
+                    </div>
+
+                    <button onClick={onClose} className="w-full py-3 bg-blue-500 text-white rounded border-b-4 border-blue-700 active:translate-y-1">
+                        關閉
+                    </button>
+                </div>
+            </div>
+        );
+
+        // 新增：商店與升級 Modal
+        const ShopModal = ({ onClose, money, buyItem, buyUpgrade }) => (
+            <div className="absolute inset-0 bg-black/90 z-50 flex items-center justify-center p-4">
+                <div className="bg-white text-black p-6 rounded-lg border-4 border-yellow-500 w-full max-w-sm font-sans relative" style={{fontFamily: "'Press Start 2P', cursive"}}>
+                    <h2 className="text-xl mb-4 text-yellow-600 font-bold text-center">🏫 校園商店 & 補習</h2>
+                    <div className="text-right mb-4 text-sm font-bold text-gray-700">持有現金: ${money}</div>
+                    
+                    <div className="space-y-3 mb-4">
+                        <div className="bg-blue-50 p-3 rounded border border-blue-200">
+                            <h3 className="font-bold text-blue-800 mb-2 border-b border-blue-200 pb-1">福利社 (道具)</h3>
+                            <div className="flex gap-2">
+                                <button onClick={() => buyItem('juice', 20)} className="flex-1 bg-white border border-gray-300 rounded p-2 text-xs hover:bg-gray-100 shadow-sm">
+                                    🧃 果汁 $20
+                                </button>
+                                <button onClick={() => buyItem('ball', 50)} className="flex-1 bg-white border border-gray-300 rounded p-2 text-xs hover:bg-gray-100 shadow-sm">
+                                    🔴 學分球 $50
+                                </button>
+                            </div>
+                        </div>
+
+                        <div className="bg-purple-50 p-3 rounded border border-purple-200">
+                            <h3 className="font-bold text-purple-800 mb-2 border-b border-purple-200 pb-1">圖書館 (能力提升)</h3>
+                            <button onClick={() => buyUpgrade('exp', 100)} className="w-full bg-white border border-gray-300 rounded p-2 text-xs hover:bg-gray-100 shadow-sm mb-2 flex justify-between items-center">
+                                <span>🎓 參加衝刺班 (+50 EXP)</span>
+                                <span className="font-bold text-purple-600">$100</span>
+                            </button>
+                            <button onClick={() => buyUpgrade('atk', 300)} className="w-full bg-white border border-gray-300 rounded p-2 text-xs hover:bg-gray-100 shadow-sm flex justify-between items-center">
+                                <span>📚 買參考書 (永久+2攻擊)</span>
+                                <span className="font-bold text-purple-600">$300</span>
+                            </button>
+                        </div>
+                    </div>
+
+                    <button onClick={onClose} className="w-full py-3 bg-red-500 text-white rounded border-b-4 border-red-700 active:translate-y-1">
+                        離開
+                    </button>
+                </div>
+            </div>
+        );
+
+        // ==========================================
+        // 3. 主應用程式邏輯 (State & Controller)
+        // ==========================================
+
+        const normalizeData = (data) => {
+            return {
+                name: data.name || '',
+                starterId: data.starterId || null,
+                level: data.level || 1,
+                exp: data.exp || 0,
+                hp: data.hp || 20,
+                maxHp: data.maxHp || 20,
+                items: { 
+                    juice: (data.items?.juice || data.items?.potion || 1), 
+                    ball: (data.items?.ball !== undefined ? data.items.ball : 5) 
+                },
+                caught: Array.isArray(data.caught) ? data.caught : [],
+                stage: data.stage || 1,
+                money: (data.money !== undefined) ? data.money : 100,
+                baseAtk: (data.baseAtk !== undefined) ? data.baseAtk : 0, 
+                stats: { 
+                    totalQuestions: data.stats?.totalQuestions || 0, 
+                    correctAnswers: data.stats?.correctAnswers || 0, 
+                    defeatedCount: data.stats?.defeatedCount || 0 
+                },
+                stageSubject: data.stageSubject || 'math',
+                openedChests: Array.isArray(data.openedChests) ? data.openedChests : [] 
+            };
+        };
+
+        function App() {
+            const [gameState, setGameState] = useState('HOME');
+            const [tempName, setTempName] = useState('');
+            const [tempStarter, setTempStarter] = useState(null);
+            const [switchMsg, setSwitchMsg] = useState('');
+            const [showDashboard, setShowDashboard] = useState(false);
+            const [showShop, setShowShop] = useState(false); 
+            
+            const [playerData, setPlayerData] = useState(normalizeData({}));
+            
+            const [playerPos, setPlayerPos] = useState({ x: 1, y: 1 });
+            const [battleState, setBattleState] = useState(null);
+            const [uiState, setUiState] = useState({
+                quiz: null, showQuiz: false, quizFeedback: null, floatingTexts: [], shake: false, flash: false, ballThrow: false,
+                inputText: '' // 新增輸入框狀態
+            });
+
+            const gameStateRef = useRef(gameState);
+            const playerPosRef = useRef(playerPos);
+            const playerDataRef = useRef(playerData);
+            const showDashboardRef = useRef(showDashboard);
+            const showShopRef = useRef(showShop);
+
+            useEffect(() => {
+                gameStateRef.current = gameState;
+                playerPosRef.current = playerPos;
+                playerDataRef.current = playerData;
+                showDashboardRef.current = showDashboard;
+                showShopRef.current = showShop;
+            }, [gameState, playerPos, playerData, showDashboard, showShop]);
+
+            useEffect(() => {
+                try {
+                    const saved = localStorage.getItem('scholarMonSave_v18');
+                    if (saved) {
+                        const parsed = JSON.parse(saved);
+                        setPlayerData(normalizeData(parsed));
+                    }
+                } catch(e) { console.error('Save corrupt or inaccessible', e); }
+            }, []);
+
+            const handleMoveAttempt = useCallback((dx, dy) => {
+                if (gameStateRef.current !== 'MAP' || showDashboardRef.current || showShopRef.current) return;
+
+                SFX.SELECT();
+                
+                const currentPos = playerPosRef.current;
+                const currentStage = playerDataRef.current.stage;
+                const currentData = playerDataRef.current;
+                
+                let nx = currentPos.x + dx;
+                let ny = currentPos.y + dy;
+                const currentMap = LEVEL_MAPS[currentStage] || LEVEL_MAPS[1];
+
+                if (ny < 0 || ny >= MAP_HEIGHT || nx < 0 || nx >= MAP_WIDTH) return;
+                
+                const targetTile = currentMap[ny][nx];
+
+                if (targetTile === 5) {
+                    const chestKey = `${currentStage}-${nx}-${ny}`;
+                    if (!currentData.openedChests.includes(chestKey)) {
+                        SFX.CHEST();
+                        
+                        const lootType = Math.random() > 0.5 ? 'juice' : 'ball';
+                        const lootName = lootType === 'juice' ? '果汁' : '學分球';
+                        
+                        const newOpened = [...currentData.openedChests, chestKey];
+                        const newItems = { ...currentData.items };
+                        newItems[lootType] = (newItems[lootType] || 0) + 1;
+                        
+                        const newData = { 
+                            ...currentData, 
+                            openedChests: newOpened,
+                            items: newItems 
+                        };
+                        
+                        setPlayerData(newData);
+                        try { localStorage.setItem('scholarMonSave_v18', JSON.stringify(newData)); } catch(e){}
+                        
+                        setUiState(prev => ({ 
+                            ...prev, 
+                            floatingTexts: [...prev.floatingTexts, {
+                                id: Date.now() + Math.random(), text: `獲得 ${lootName}!`, x: '50%', y: '50%', color: '#ffd700'
+                            }] 
+                        }));
+                        return; 
+                    }
+                }
+
+                if ([1, 3, 4].includes(targetTile)) return;
+
+                setPlayerPos({ x: nx, y: ny });
+
+                if (targetTile === 2) {
+                    if (currentStage === 4) {
+                        startBossBattle(); 
+                    } else {
+                        setGameState('LEVEL_CLEAR');
+                    }
+                    return;
+                }
+
+                if (Math.random() < ENCOUNTER_RATE) {
+                    startBattle();
+                }
+            }, []);
+
+            useEffect(() => {
+                const handleKeyDown = (e) => {
+                    let dx = 0, dy = 0;
+                    if (e.key === 'ArrowUp') dy = -1;
+                    else if (e.key === 'ArrowDown') dy = 1;
+                    else if (e.key === 'ArrowLeft') dx = -1;
+                    else if (e.key === 'ArrowRight') dx = 1;
+
+                    if (dx !== 0 || dy !== 0) {
+                        handleMoveAttempt(dx, dy);
+                    }
+                };
+
+                window.addEventListener('keydown', handleKeyDown);
+                return () => window.removeEventListener('keydown', handleKeyDown);
+            }, [handleMoveAttempt]);
+
+            const saveGame = (newData) => {
+                try {
+                    const dataToSave = newData || playerData;
+                    localStorage.setItem('scholarMonSave_v18', JSON.stringify(dataToSave));
+                    setPlayerData(dataToSave);
+                } catch (e) {
+                    console.warn("Storage quota exceeded or disabled", e);
+                    if(newData) setPlayerData(newData);
+                }
+            };
+
+            const startNewGame = () => {
+                const newGameData = normalizeData({
+                    name: tempName, starterId: tempStarter
+                });
+                saveGame(newGameData);
+                setGameState('MAP');
+                setPlayerPos({ x: 1, y: 1 });
+            };
+
+            const handleContinue = () => {
+                if (playerData.hp <= 0) setGameState('GAME_OVER');
+                else setGameState('MAP');
+            };
+
+            const handleSwitchTeam = (newId) => {
+                const newData = { ...playerData, starterId: newId };
+                setPlayerData(newData);
+                saveGame(newData);
+                SFX.SWITCH();
+                setSwitchMsg('更換成功！');
+                setTimeout(() => setSwitchMsg(''), 1500);
+            };
+
+            const buyItem = (itemType, cost) => {
+                if (playerData.money >= cost) {
+                    const newItems = { ...playerData.items, [itemType]: (playerData.items[itemType] || 0) + 1 };
+                    const newMoney = playerData.money - cost;
+                    saveGame({ ...playerData, items: newItems, money: newMoney });
+                    SFX.BUY();
+                } else {
+                    SFX.ERROR();
+                }
+            };
+
+            const buyUpgrade = (type, cost) => {
+                if (playerData.money >= cost) {
+                    const newMoney = playerData.money - cost;
+                    let newData = { ...playerData, money: newMoney };
+
+                    if (type === 'exp') {
+                        let nextLevel = playerData.level;
+                        let nextExp = playerData.exp + 50;
+                        while (nextExp >= nextLevel * 100) {
+                            nextExp = nextExp - (nextLevel * 100);
+                            nextLevel++;
+                        }
+                        newData.level = nextLevel;
+                        newData.exp = nextExp;
+                        newData.maxHp = 20 + (nextLevel * 5);
+                        newData.hp = newData.maxHp; 
+                        SFX.HEAL();
+                    } else if (type === 'atk') {
+                        newData.baseAtk = (playerData.baseAtk || 0) + 2;
+                        SFX.BUY();
+                    }
+
+                    saveGame(newData);
+                } else {
+                    SFX.ERROR();
+                }
+            };
+
+            const movePlayer = (dx, dy) => handleMoveAttempt(dx, dy);
+
+            const renderedMap = useMemo(() => {
+                const currentMap = LEVEL_MAPS[playerData.stage] || LEVEL_MAPS[1];
+                return (
+                    <div style={{ display: 'grid', gridTemplateColumns: `repeat(${MAP_WIDTH}, 32px)`, gap: '1px' }}>
+                        {currentMap.flat().map((cell, i) => {
+                            const x = i % MAP_WIDTH;
+                            const y = Math.floor(i / MAP_WIDTH);
+                            const isPlayer = x === playerPos.x && y === playerPos.y;
+                            
+                            return (
+                                <div key={i} className="w-8 h-8 relative flex items-center justify-center bg-black/20">
+                                    {cell === 1 && <div className="w-full h-full bg-gray-600 border border-gray-500"></div>}
+                                    {cell === 2 && <div className="w-full h-full bg-green-500/30 animate-pulse border border-green-400"></div>}
+                                    {cell === 3 && <div className="w-6 h-6"><DeskSprite /></div>}
+                                    {cell === 4 && <div className="w-6 h-6"><ChairSprite /></div>}
+                                    {cell === 5 && <div className="w-6 h-6"><ChestSprite open={playerData.openedChests.includes(`${playerData.stage}-${x}-${y}`)} /></div>}
+                                    {cell === 9 && <div className="w-full h-full bg-blue-500/30"></div>}
+                                    {isPlayer && <div className="absolute inset-0 z-10"><PlayerSprite /></div>}
+                                </div>
+                            );
+                        })}
+                    </div>
+                );
+            }, [playerData.stage, playerPos, playerData.openedChests]);
+
+            const startBossBattle = () => {
+                SFX.BOSS_ENTER();
+                setBattleState({
+                    enemy: { ...BOSS, hp: BOSS.hpBase, maxHp: BOSS.hpBase },
+                    turn: 'PLAYER', bp: 1, logs: ["考卷魔王出現了！"], anim: 'none', isDefending: false,
+                    currentMode: 'boss',
+                    enemyStatus: null
+                });
+                setGameState('BATTLE');
+            };
+
+            const startBattle = () => {
+                const currentData = playerDataRef.current;
+                let pool = MONSTERS.filter(m => m.minLv <= currentData.level);
+                
+                // 簡化怪物邏輯，只看等級
+                if (currentData.stage === 4) { const stage4Monsters = pool.filter(m => m.minLv === 7); if (stage4Monsters.length > 0 && Math.random() > 0.3) pool = stage4Monsters; }
+                else if (currentData.stage === 3) { const stage3Monsters = pool.filter(m => m.minLv === 5); if (stage3Monsters.length > 0 && Math.random() > 0.3) pool = stage3Monsters; }
+                
+                if (pool.length === 0) pool = [MONSTERS[0]];
+                
+                const enemyTemplate = pool[Math.floor(Math.random() * pool.length)];
+                const scale = 1 + (currentData.level * 0.2);
+                
+                let modeText = '語文特訓';
+                if (currentData.stage >= 3) modeText = '填充挑戰';
+
+                setBattleState({
+                    enemy: { ...enemyTemplate, maxHp: Math.floor(enemyTemplate.hpBase * scale), hp: Math.floor(enemyTemplate.hpBase * scale) },
+                    turn: 'PLAYER', bp: 1, logs: [`野生 ${enemyTemplate.name} 出現！`], anim: 'none', isDefending: false,
+                    currentMode: modeText,
+                    enemyStatus: null
+                });
+                setGameState('BATTLE');
+            };
+
+            const useJuice = () => { if (battleState.turn !== 'PLAYER') return; if ((playerData.items.juice || 0) <= 0) { addLog("沒有果汁了！"); return; } const newItems = { ...playerData.items, juice: playerData.items.juice - 1 }; const newHp = Math.min(playerData.maxHp, playerData.hp + 10); setPlayerData(prev => ({ ...prev, items: newItems, hp: newHp })); addLog("喝了果汁！HP+10"); showFloatingText("+10", '20%', '60%', '#00b894'); SFX.SELECT(); setBattleState(prev => ({ ...prev, turn: 'ENEMY', isDefending: false })); setTimeout(enemyTurn, 1000); };
+            const useBall = () => { 
+                if (battleState.turn !== 'PLAYER') return; 
+                if (battleState.enemy.isBoss) { addLog("魔王無法收服！"); SFX.WRONG(); return; }
+                if ((playerData.items.ball || 0) <= 0) { addLog("沒有學分球了！"); return; } 
+                const newItems = { ...playerData.items, ball: playerData.items.ball - 1 }; setPlayerData(prev => ({ ...prev, items: newItems })); setBattleState(prev => ({ ...prev, turn: 'ANIMATING', isDefending: false })); addLog("去吧！學分球！"); SFX.THROW(); setUiState(prev => ({ ...prev, ballThrow: true })); const hpPercent = battleState.enemy.hp / battleState.enemy.maxHp; const catchChance = (1 - hpPercent) + 0.1; setTimeout(() => { setUiState(prev => ({ ...prev, ballThrow: false })); if (Math.random() < catchChance) { SFX.CAUGHT(); showFloatingText("收服成功!", '60%', '30%', '#fdcb6e'); const newCaught = [...playerData.caught]; if (!newCaught.includes(battleState.enemy.id)) newCaught.push(battleState.enemy.id); if(Math.random() > 0.5) newItems.ball += 1; saveGame({ ...playerData, items: newItems, caught: newCaught, hp: playerData.maxHp }); setBattleState(prev => ({ ...prev, logs: ["成功收服了精靈！"] })); setTimeout(() => setGameState('VICTORY'), 1500); } else { addLog("哎呀！被掙脫了！"); showFloatingText("失敗...", '60%', '30%', 'white'); setTimeout(() => { setBattleState(prev => ({ ...prev, turn: 'ENEMY' })); setTimeout(enemyTurn, 1000); }, 1000); } }, 1000); 
+            };
+            
+            const addLog = (text) => setBattleState(prev => ({ ...prev, logs: [text, ...prev.logs].slice(0, 3) }));
+            const showFloatingText = (text, x, y, color='white') => { const id = Date.now() + Math.random(); setUiState(prev => ({ ...prev, floatingTexts: [...prev.floatingTexts, {id, text, x, y, color}] })); setTimeout(() => setUiState(prev => ({ ...prev, floatingTexts: prev.floatingTexts.filter(t => t.id !== id) })), 800); };
+            const getTypeIcon = (atkType, defType) => { const adv = TYPE_ADVANTAGE[atkType] === defType ? 1.5 : (TYPE_ADVANTAGE[defType] === atkType ? 0.5 : 1); return adv > 1 ? '🔼' : (adv < 1 ? '🔽' : ''); };
+            
+            const playerAction = (action) => {
+                if (battleState.turn !== 'PLAYER') return;
+                const starter = STARTERS.find(s => s.id === playerData.starterId);
+
+                // 只使用語文題目
+                const q = generateQuestion(playerData.stage);
+                
+                if (action === 'ATTACK') {
+                    setUiState(prev => ({ ...prev, quiz: { ...q, type: q.type === 'input' ? 'input' : 'ATTACK', power: 10 }, showQuiz: true, inputText: '' }));
+                    SFX.SELECT();
+                } else if (action === 'CHARGE') {
+                    setUiState(prev => ({ ...prev, quiz: { ...q, type: q.type === 'input' ? 'input_charge' : 'CHARGE', power: 0 }, showQuiz: true, inputText: '' }));
+                    SFX.SELECT();
+                } else if (action === 'SKILL') {
+                    if (battleState.bp < 2) { addLog("BP 不足！"); SFX.ERROR(); return; }
+                    setUiState(prev => ({ ...prev, quiz: { ...q, type: q.type === 'input' ? 'input_skill' : 'SKILL', power: 25 }, showQuiz: true, inputText: '' }));
+                    SFX.SELECT();
+                }
+            };
+
+            // 處理填充題提交
+            const handleTextInputSubmit = () => {
+                const { quiz, inputText } = uiState;
+                const isCorrect = inputText.trim() === quiz.correctVal;
+                // Reuse existing answer logic but pass dummy index
+                processAnswer(isCorrect, quiz.type.includes('charge') ? 'CHARGE' : (quiz.type.includes('skill') ? 'SKILL' : 'ATTACK'));
+            }
+
+            const handleAnswer = (optionIdx) => {
+                const { quiz } = uiState;
+                const isCorrect = optionIdx === quiz.ans;
+                processAnswer(isCorrect, quiz.type);
+            };
+
+            const processAnswer = (isCorrect, actionType) => {
+                const { quiz } = uiState;
+                const newStats = { 
+                    totalQuestions: (playerData.stats?.totalQuestions || 0) + 1,
+                    correctAnswers: (playerData.stats?.correctAnswers || 0) + (isCorrect ? 1 : 0),
+                    defeatedCount: playerData.stats?.defeatedCount || 0
+                };
+                setPlayerData(prev => ({ ...prev, stats: newStats }));
+
+                setUiState(prev => ({ ...prev, showQuiz: false, quizFeedback: isCorrect ? 'CORRECT' : 'WRONG' }));
+                setTimeout(() => setUiState(prev => ({ ...prev, quizFeedback: null })), 1000);
+
+                if (isCorrect) {
+                    SFX.CORRECT();
+                    
+                    if (actionType === 'CHARGE') {
+                        setBattleState(prev => ({ ...prev, bp: Math.min(MAX_BP, prev.bp + 2), anim: 'charge', isDefending: true }));
+                        SFX.CHARGE();
+                        setTimeout(() => setBattleState(prev => ({ ...prev, anim: 'none' })), 800);
+                        showFloatingText("+2 BP", '50%', '50%', COLORS.math);
+                        addLog("蓄力中... 防禦提升！");
+                        
+                        setTimeout(() => {
+                            setBattleState(prev => ({ ...prev, turn: 'ENEMY' }));
+                            setTimeout(enemyTurn, 1000);
+                        }, 1000);
+                    } else {
+                        const starter = STARTERS.find(s => s.id === playerData.starterId);
+                        const typeMod = TYPE_ADVANTAGE[starter.type] === battleState.enemy.type ? 1.5 : (TYPE_ADVANTAGE[battleState.enemy.type] === starter.type ? 0.5 : 1.0);
+                        
+                        // 傷害計算加上基礎攻擊力
+                        let power = actionType === 'SKILL' ? 25 : 10;
+                        let baseDmg = (power + (playerData.baseAtk || 0));
+                        let damage = Math.floor(baseDmg * (1 + playerData.level * 0.1) * typeMod);
+                        let healAmount = 0;
+                        let statusEffect = null;
+
+                        if (actionType === 'SKILL') {
+                            setBattleState(prev => ({ ...prev, bp: prev.bp - 2, anim: starter.type, isDefending: false })); 
+                            
+                            if (starter.type === 'lit') {
+                                healAmount = Math.floor(damage * 0.5); 
+                            } else if (starter.type === 'sci') {
+                                if (Math.random() < 0.5) statusEffect = 'paralyze'; 
+                            } else if (starter.type === 'math') {
+                                damage = Math.floor(damage * 1.5); 
+                            }
+
+                            setTimeout(() => setBattleState(prev => ({ ...prev, anim: 'none' })), 800);
+                        } else {
+                            setBattleState(prev => ({ ...prev, bp: Math.min(MAX_BP, prev.bp + 1), isDefending: false }));
+                            setUiState(prev => ({ ...prev, shake: true }));
+                            setTimeout(() => setUiState(prev => ({ ...prev, shake: false })), 400);
+                        }
+
+                        showFloatingText(`-${damage}`, '70%', '20%', COLORS.red);
+                        let logText = `命中！造成 ${damage} 傷害`;
+                        if (healAmount > 0) {
+                            showFloatingText(`+${healAmount}`, '20%', '20%', '#00b894');
+                            logText += `，回復 ${healAmount} HP`;
+                            setPlayerData(prev => ({ ...prev, hp: Math.min(prev.maxHp, prev.hp + healAmount) }));
+                        }
+                        if (statusEffect === 'paralyze') {
+                            logText += "，敵人麻痺了！";
+                        }
+                        addLog(logText);
+
+                        setBattleState(prev => {
+                            const newHp = Math.max(0, prev.enemy.hp - damage);
+                            return { ...prev, enemy: { ...prev.enemy, hp: newHp }, enemyStatus: statusEffect };
+                        });
+
+                        setTimeout(() => {
+                            if (battleState.enemy.hp - damage <= 0) {
+                                handleWin();
+                            } else {
+                                setBattleState(prev => ({ ...prev, turn: 'ENEMY' }));
+                                setTimeout(enemyTurn, 1500);
+                            }
+                        }, 1000);
+                    }
+
+                } else {
+                    SFX.WRONG();
+                    if (actionType === 'CHARGE') {
+                        addLog("蓄力失敗...");
+                    } else {
+                        addLog("答錯了... 攻擊失誤！");
+                    }
+                    showFloatingText("Miss", '70%', '20%', 'gray');
+                    setBattleState(prev => ({ ...prev, turn: 'ENEMY', isDefending: false }));
+                    setTimeout(enemyTurn, 1500);
+                }
+            }
+
+            const enemyTurn = () => {
+                if (gameState !== 'BATTLE') return;
+                
+                if (battleState.enemyStatus === 'paralyze') {
+                    addLog("敵人麻痺無法動彈！");
+                    showFloatingText("麻痺", '70%', '20%', '#f1c40f');
+                    setBattleState(prev => ({ ...prev, enemyStatus: null, turn: 'PLAYER' })); 
+                    return;
+                }
+
+                const enemy = battleState.enemy;
+                let dmg = Math.max(1, Math.floor(enemy.hpBase * 0.25 + (playerData.stage * 3))); 
+                
+                if (battleState.isDefending) {
+                    dmg = Math.floor(dmg * 0.5);
+                    SFX.DEFEND();
+                    addLog("防禦成功！傷害減半！");
+                } else {
+                    SFX.HIT();
+                }
+
+                setUiState(prev => ({ ...prev, shake: true, flash: true })); 
+                setTimeout(() => setUiState(prev => ({ ...prev, shake: false, flash: false })), 400);
+
+                showFloatingText(`-${dmg}`, '20%', '60%', COLORS.red);
+                if(!battleState.isDefending) addLog(`${enemy.name} 發動攻擊！受到 ${dmg} 點傷害`);
+
+                setPlayerData(prev => {
+                    const newHp = Math.max(0, prev.hp - dmg);
+                    if (newHp <= 0) {
+                        setTimeout(() => { SFX.LOSE(); setGameState('GAME_OVER'); }, 1000);
+                    } else {
+                        setTimeout(() => setBattleState(prev => ({ ...prev, turn: 'PLAYER', isDefending: false })), 1000);
+                    }
+                    return { ...prev, hp: newHp };
+                });
+            };
+
+            const handleWin = () => {
+                SFX.WIN();
+                const expGain = battleState.enemy.exp;
+                const moneyGain = Math.floor(expGain * 0.5);
+                let nextLevel = playerData.level;
+                let nextExp = playerData.exp + expGain;
+                let levelUp = false;
+
+                while (nextExp >= nextLevel * 100) {
+                    nextExp = nextExp - (nextLevel * 100);
+                    nextLevel++;
+                    levelUp = true;
+                }
+
+                const currentDefeated = (playerData.stats?.defeatedCount || 0) + 1;
+                const newStats = { 
+                    ...playerData.stats, 
+                    defeatedCount: currentDefeated 
+                };
+
+                const newMoney = playerData.money + moneyGain;
+                const newMaxHp = 20 + (nextLevel * 5);
+                
+                let newHp = newMaxHp; // 自動回滿血
+
+                addLog(`勝利！獲得 ${expGain} 經驗, $${moneyGain}`);
+                
+                if (levelUp) {
+                    addLog(`升級了！ Lv.${nextLevel}`);
+                } else {
+                    addLog("戰鬥勝利！HP已完全恢復！");
+                }
+
+                const nextData = {
+                    ...playerData,
+                    level: nextLevel,
+                    exp: nextExp,
+                    money: newMoney,
+                    maxHp: newMaxHp,
+                    hp: newHp,
+                    stats: newStats
+                };
+                
+                saveGame(nextData);
+
+                setTimeout(() => {
+                    if (battleState.enemy.isBoss) {
+                        setGameState('VICTORY');
+                    } else {
+                        setGameState('MAP');
+                    }
+                }, 2000);
+            };
+
+            // --- 4. 視圖渲染層 ---
+            
+            if (gameState === 'HOME') {
+                return (
+                    <div className="h-screen w-full flex flex-col items-center justify-center bg-gray-900 relative overflow-hidden">
+                        <div className="bg-stripes absolute inset-0 opacity-20"></div>
+                        <div className="z-10 text-center space-y-8 animate-bounce">
+                            <h1 className="text-4xl md:text-6xl text-yellow-400 drop-shadow-lg tracking-widest" style={{textShadow: '4px 4px 0 #000'}}>學園寶可夢</h1>
+                            <p className="text-white text-xl">ScholarMon Ver 18.14 (語文版)</p>
+                        </div>
+                        
+                        <div className="z-10 mt-12 bg-gray-800 p-6 rounded-xl border-4 border-white shadow-2xl w-80">
+                            {!tempStarter ? (
+                                <>
+                                    <p className="mb-4 text-center text-cyan-300">請輸入你的名字：</p>
+                                    <input 
+                                        type="text" 
+                                        maxLength="6"
+                                        className="w-full bg-gray-700 text-white p-2 rounded mb-4 text-center border-2 border-gray-500 focus:border-yellow-400 outline-none"
+                                        value={tempName}
+                                        onChange={(e) => setTempName(e.target.value)}
+                                        placeholder="名字..."
+                                    />
+                                    <div className="grid grid-cols-3 gap-2">
+                                        {STARTERS.map(s => (
+                                            <button key={s.id} onClick={() => { SFX.SELECT(); setTempStarter(s.id); }} className="hover:scale-110 transition-transform">
+                                                <div className="w-16 h-16 mx-auto bg-gray-700 rounded-full border-2 border-white flex items-center justify-center">
+                                                    <div className="w-10 h-10"><StarterSprite id={s.id} /></div>
+                                                </div>
+                                                <div className="text-xs mt-1 text-center" style={{color: s.color}}>{s.desc}</div>
+                                            </button>
+                                        ))}
+                                    </div>
+                                </>
+                            ) : (
+                                <div className="text-center">
+                                    <p className="mb-4 text-yellow-300">就決定是你了！</p>
+                                    <div className="w-24 h-24 mx-auto mb-4 animate-bounce">
+                                        <StarterSprite id={tempStarter} />
+                                    </div>
+                                    <div className="text-xl mb-6" style={{color: STARTERS.find(s=>s.id===tempStarter).color}}>
+                                        {STARTERS.find(s=>s.id===tempStarter).name}
+                                    </div>
+                                    <button 
+                                        onClick={startNewGame}
+                                        disabled={!tempName}
+                                        className="w-full bg-red-500 text-white py-3 rounded border-b-4 border-red-700 active:border-b-0 active:translate-y-1 disabled:opacity-50"
+                                    >
+                                        開始冒險
+                                    </button>
+                                    <button onClick={() => setTempStarter(null)} className="mt-2 text-gray-400 text-sm hover:text-white">重選夥伴</button>
+                                </div>
+                            )}
+                            
+                            {playerData.name && !tempStarter && (
+                                <button onClick={handleContinue} className="w-full mt-4 bg-green-600 text-white py-2 rounded border-b-4 border-green-800 active:translate-y-1">
+                                    繼續遊戲 (Lv.{playerData.level} {playerData.name})
+                                </button>
+                            )}
+                        </div>
+                    </div>
+                );
+            }
+
+            if (gameState === 'MAP') {
+                const info = LEVEL_INFO[playerData.stage] || LEVEL_INFO[1];
+                const expPercent = (playerData.exp / (playerData.level * 100)) * 100;
+
+                return (
+                    <div className="h-screen w-full flex flex-col items-center justify-center relative transition-colors duration-1000" style={{backgroundColor: info.bg}}>
+                        {showDashboard && (
+                            <DashboardModal 
+                                stats={playerData.stats} 
+                                level={playerData.level}
+                                caughtCount={playerData.caught.length}
+                                onClose={() => setShowDashboard(false)} 
+                            />
+                        )}
+
+                        {showShop && (
+                            <ShopModal 
+                                money={playerData.money} 
+                                buyItem={buyItem} 
+                                buyUpgrade={buyUpgrade}
+                                onClose={() => setShowShop(false)} 
+                            />
+                        )}
+
+                        <div className="absolute top-2 left-2 right-2 flex justify-between items-start z-20">
+                            <div className="bg-black/70 p-2 rounded text-white border-2 border-white text-xs md:text-sm w-48">
+                                <div className="text-yellow-400 font-bold">{playerData.name} Lv.{playerData.level}</div>
+                                <div className="flex items-center gap-1 mt-1">
+                                    <div className="w-4 h-4"><StarterSprite id={playerData.starterId} /></div>
+                                    <div className="flex-1">
+                                        <div className="h-2 bg-gray-700 rounded-full overflow-hidden border border-gray-500 mb-1">
+                                            <div className="h-full bg-green-500 transition-all duration-300" style={{width: `${(playerData.hp/playerData.maxHp)*100}%`}}></div>
+                                        </div>
+                                        <div className="h-1 bg-gray-700 rounded-full overflow-hidden">
+                                            <div className="h-full bg-blue-400 transition-all duration-300" style={{width: `${expPercent}%`}}></div>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div className="mt-1 flex justify-between text-xs text-gray-300">
+                                    <span>HP {playerData.hp}/{playerData.maxHp}</span>
+                                    <span className="text-cyan-300">${playerData.money}</span>
+                                </div>
+                            </div>
+                            
+                            <div className="flex flex-col gap-2">
+                                <div className="bg-black/70 p-2 rounded text-white border-2 border-white text-center">
+                                    <div className="text-sm font-bold mb-1">{info.name}</div>
+                                    <div className="text-xs text-gray-300">目標: 抵達出口</div>
+                                </div>
+                                <button 
+                                    onClick={() => setShowDashboard(true)}
+                                    className="bg-blue-600 text-white p-2 rounded border-2 border-white text-xs hover:bg-blue-500 shadow-lg"
+                                >
+                                    📊 學習狀況
+                                </button>
+                            </div>
+                        </div>
+
+                        <div className="absolute bottom-20 left-2 z-20 flex flex-col gap-2">
+                            <div className="bg-black/80 p-2 rounded border border-white">
+                                <div className="text-xs mb-1 text-gray-300">隊伍切換</div>
+                                <div className="flex gap-1">
+                                    {STARTERS.map(s => (
+                                        <button 
+                                            key={s.id} 
+                                            onClick={() => handleSwitchTeam(s.id)}
+                                            className={`w-8 h-8 rounded border ${playerData.starterId === s.id ? 'bg-yellow-600 border-yellow-300' : 'bg-gray-700 border-gray-500'}`}
+                                        >
+                                            <div className="w-6 h-6 mx-auto"><StarterSprite id={s.id} /></div>
+                                        </button>
+                                    ))}
+                                </div>
+                            </div>
+                            {switchMsg && <div className="text-yellow-400 text-xs shadow-black drop-shadow-md animate-bounce">{switchMsg}</div>}
+                        </div>
+
+                        <div className="absolute bottom-20 right-2 z-20">
+                            <button 
+                                onClick={() => setShowShop(true)}
+                                className="bg-orange-500 text-white p-3 rounded-full border-2 border-white shadow-lg animate-pulse hover:bg-orange-600"
+                            >
+                                🏪 校園商店
+                            </button>
+                        </div>
+
+                        <div className="bg-gray-900 p-1 rounded border-4 border-gray-600 shadow-2xl relative">
+                             {renderedMap}
+                        </div>
+
+                        <div className="absolute bottom-4 left-0 right-0 flex justify-center gap-4 z-30">
+                            <button className="w-12 h-12 bg-gray-200 rounded-full shadow-lg active:bg-gray-400 border-b-4 border-gray-400 active:border-b-0 active:translate-y-1 text-2xl text-black font-bold" onClick={() => movePlayer(0, -1)}>▲</button>
+                            <div className="flex gap-4">
+                                <button className="w-12 h-12 bg-gray-200 rounded-full shadow-lg active:bg-gray-400 border-b-4 border-gray-400 active:border-b-0 active:translate-y-1 text-2xl text-black font-bold" onClick={() => movePlayer(-1, 0)}>◀</button>
+                                <button className="w-12 h-12 bg-gray-200 rounded-full shadow-lg active:bg-gray-400 border-b-4 border-gray-400 active:border-b-0 active:translate-y-1 text-2xl text-black font-bold" onClick={() => movePlayer(0, 1)}>▼</button>
+                                <button className="w-12 h-12 bg-gray-200 rounded-full shadow-lg active:bg-gray-400 border-b-4 border-gray-400 active:border-b-0 active:translate-y-1 text-2xl text-black font-bold" onClick={() => movePlayer(1, 0)}>▶</button>
+                            </div>
+                        </div>
+                    </div>
+                );
+            }
+
+            if (gameState === 'BATTLE') {
+                const { enemy, bp, logs, anim, turn } = battleState;
+                const starter = STARTERS.find(s => s.id === playerData.starterId);
+                const { showQuiz, quiz, ballThrow } = uiState;
+
+                return (
+                    <div className={`h-screen w-full flex flex-col relative overflow-hidden ${uiState.flash ? 'bg-red-900' : 'bg-gray-800'}`}>
+                        <div className="bg-stripes absolute inset-0 opacity-10 pointer-events-none"></div>
+                        
+                        {anim !== 'none' && <SkillEffect type={anim} />}
+                        {battleState.isDefending && <div className="absolute inset-0 z-20 pointer-events-none"><div className="w-full h-full border-8 border-blue-400 opacity-50 defense-shield rounded-3xl"></div></div>}
+                        {uiState.floatingTexts.map(t => <FloatingText key={t.id} {...t} />)}
+                        {ballThrow && <div className="ball-throw absolute z-50 left-1/4 bottom-1/4"><BallSprite /></div>}
+
+                        <div className="flex-1 flex flex-col items-center justify-center relative p-4">
+                            <div className="absolute top-4 left-0 right-0 text-center pointer-events-none">
+                                <span className="bg-yellow-500 text-black px-3 py-1 rounded-full text-xs font-bold border-2 border-white shadow-lg">
+                                    {battleState.currentMode || '一般戰鬥'}
+                                </span>
+                            </div>
+
+                            <div className="bg-gray-700/90 p-3 rounded-lg border-2 border-white w-full max-w-md mb-8 flex items-center justify-between shadow-lg mt-8">
+                                <div>
+                                    <div className="text-lg font-bold text-white flex items-center gap-2">
+                                        {enemy.name} 
+                                        {playerData.caught.includes(enemy.id) && <StickerSprite />}
+                                    </div>
+                                    <div className="w-32 h-3 bg-gray-600 rounded-full mt-1 overflow-hidden border border-gray-500">
+                                        <div className="h-full bg-red-500 transition-all duration-500" style={{width: `${(enemy.hp/enemy.maxHp)*100}%`}}></div>
+                                    </div>
+                                    <div className="flex justify-between items-center mt-1">
+                                        <div className="text-xs text-gray-400 capitalize">{enemy.type === 'lit' ? '文科' : (enemy.type === 'sci' ? '理科' : '數學')}</div>
+                                        {battleState.enemyStatus === 'paralyze' && <span className="text-xs bg-yellow-500 text-black px-1 rounded animate-pulse">麻痺</span>}
+                                    </div>
+                                </div>
+                                <div className={`w-24 h-24 transition-all duration-300 ${uiState.shake ? 'shake-effect' : ''}`}>
+                                    <MonsterSprite id={enemy.id} type={enemy.type} hit={uiState.flash} />
+                                </div>
+                            </div>
+                        </div>
+
+                        <div className="bg-white text-black p-4 rounded-t-3xl border-t-4 border-blue-500 shadow-[0_-10px_30px_rgba(0,0,0,0.5)] z-20">
+                            <div className="flex justify-between items-end mb-4 px-2">
+                                <div className="w-20 h-20 -mt-12 relative z-10">
+                                    <StarterSprite id={starter.id} />
+                                    {battleState.isDefending && <div className="absolute -top-2 -right-2 bg-blue-500 text-white text-xs px-2 py-1 rounded-full animate-pulse border border-white">防禦中</div>}
+                                </div>
+                                <div className="text-right">
+                                    <div className="font-bold text-lg">{playerData.name}</div>
+                                    <div className="text-sm bg-gray-200 px-2 rounded-full inline-block">Lv.{playerData.level} <span className="text-blue-600 font-bold">{starter.type.toUpperCase()}</span></div>
+                                    <div className="flex items-center gap-2 mt-1 justify-end">
+                                        <span className="font-bold text-xs text-gray-500">HP</span>
+                                        <div className="w-24 h-3 bg-gray-300 rounded-full overflow-hidden">
+                                            <div className="h-full bg-green-500" style={{width: `${(playerData.hp/playerData.maxHp)*100}%`}}></div>
+                                        </div>
+                                        <span className="text-sm font-bold">{playerData.hp}</span>
+                                    </div>
+                                    <div className="flex gap-1 justify-end mt-1">
+                                        {[...Array(MAX_BP)].map((_, i) => (
+                                            <div key={i} className={`w-3 h-3 rounded-full ${i < bp ? 'bg-yellow-400' : 'bg-gray-300'}`}></div>
+                                        ))}
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div className="h-16 bg-gray-100 rounded border border-gray-300 p-2 mb-4 overflow-y-auto text-sm font-mono leading-tight">
+                                {logs.map((l, i) => <div key={i} className={i===0?"font-bold text-black":"text-gray-500"}>{l}</div>)}
+                            </div>
+
+                            {!showQuiz ? (
+                                <div className="grid grid-cols-2 gap-3">
+                                    <button onClick={() => playerAction('ATTACK')} disabled={turn!=='PLAYER'} className="bg-red-500 text-white py-3 rounded-xl font-bold shadow-md active:scale-95 disabled:opacity-50 border-b-4 border-red-700">
+                                        攻擊 {getTypeIcon(starter.type, enemy.type)}
+                                    </button>
+                                    <button onClick={() => playerAction('CHARGE')} disabled={turn!=='PLAYER'} className="bg-orange-400 text-white py-3 rounded-xl font-bold shadow-md active:scale-95 disabled:opacity-50 border-b-4 border-orange-600">
+                                        蓄力/防禦
+                                    </button>
+                                    <button onClick={() => playerAction('SKILL')} disabled={turn!=='PLAYER' || bp < 2} className="bg-yellow-400 text-black py-3 rounded-xl font-bold shadow-md active:scale-95 disabled:opacity-50 border-b-4 border-yellow-600 flex flex-col items-center justify-center leading-tight">
+                                        <span>{starter.skill} (2BP)</span>
+                                        <span className="text-xs font-normal text-gray-700">{starter.skillDesc}</span>
+                                    </button>
+                                    <div className="grid grid-cols-2 gap-2">
+                                        <button onClick={useJuice} disabled={turn!=='PLAYER'} className="bg-green-500 text-white py-2 rounded-lg font-bold shadow active:scale-95 disabled:opacity-50 flex justify-center items-center gap-1 text-sm">
+                                            <div className="w-4 h-4"><JuiceSprite /></div> x{playerData.items.juice||0}
+                                        </button>
+                                        <button onClick={useBall} disabled={turn!=='PLAYER'} className="bg-blue-500 text-white py-2 rounded-lg font-bold shadow active:scale-95 disabled:opacity-50 flex justify-center items-center gap-1 text-sm">
+                                            <div className="w-4 h-4"><BallSprite /></div> x{playerData.items.ball||0}
+                                        </button>
+                                    </div>
+                                </div>
+                            ) : (
+                                <div className="animate-fade-in w-full">
+                                    <div className="text-center text-lg font-bold mb-3 bg-blue-100 p-2 rounded text-blue-800 border-2 border-blue-200">
+                                        {quiz.q}
+                                    </div>
+                                    
+                                    {/* 供詞填充介面 (Stage 3+) */}
+                                    {(quiz.type === 'input' || quiz.type === 'input_charge' || quiz.type === 'input_skill') ? (
+                                        <div className="flex flex-col gap-3">
+                                            <div className="bg-white p-2 rounded border border-gray-300 text-sm">
+                                                <div className="text-gray-500 text-xs mb-1">可選詞語：</div>
+                                                <div className="flex flex-wrap gap-2">
+                                                    {CHINESE_WORDS.map(word => (
+                                                        <span key={word} className="bg-gray-100 px-2 py-1 rounded text-black font-bold">{word}</span>
+                                                    ))}
+                                                </div>
+                                            </div>
+                                            <input 
+                                                type="text" 
+                                                className="w-full p-3 text-black rounded border-4 border-blue-400 text-center font-bold text-xl outline-none focus:border-blue-600"
+                                                placeholder="請輸入詞語"
+                                                value={uiState.inputText}
+                                                onChange={(e) => setUiState(prev => ({...prev, inputText: e.target.value}))}
+                                                onKeyDown={(e) => e.key === 'Enter' && handleTextInputSubmit()}
+                                            />
+                                            <button onClick={handleTextInputSubmit} className="bg-green-500 text-white py-3 rounded-xl font-bold shadow-md border-b-4 border-green-700 active:translate-y-1">
+                                                提交答案
+                                            </button>
+                                        </div>
+                                    ) : (
+                                        /* 選擇題介面 (Stage 1-2) */
+                                        <div className="grid grid-cols-2 gap-3">
+                                            {quiz.options.map((opt, i) => (
+                                                <button key={i} onClick={() => handleAnswer(i)} className="bg-white border-2 border-gray-300 hover:border-blue-500 hover:bg-blue-50 py-3 rounded-xl font-bold text-xl shadow-sm text-black">
+                                                    {opt}
+                                                </button>
+                                            ))}
+                                        </div>
+                                    )}
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                );
+            }
+
+            if (gameState === 'LEVEL_CLEAR') {
+                return (
+                    <div className="h-screen flex flex-col items-center justify-center bg-green-600 text-white text-center p-8">
+                        <h1 className="text-4xl mb-6 font-bold">區域通過！</h1>
+                        <div className="text-6xl mb-8 animate-bounce">🚪</div>
+                        <button 
+                            onClick={() => {
+                                const nextData = { ...playerData, stage: playerData.stage + 1 };
+                                setPlayerData(nextData);
+                                saveGame(nextData);
+                                setGameState('MAP');
+                                setPlayerPos({ x: 1, y: 1 });
+                            }}
+                            className="bg-white text-green-600 px-8 py-4 rounded-full font-bold text-xl shadow-lg border-b-4 border-gray-300 active:translate-y-1"
+                        >
+                            前往下一層
+                        </button>
+                    </div>
+                );
+            }
+
+            if (gameState === 'VICTORY') {
+                return (
+                    <div className="h-screen flex flex-col items-center justify-center bg-yellow-500 text-white text-center p-4">
+                        <h1 className="text-4xl mb-4 font-bold drop-shadow-md">恭喜通關！</h1>
+                        <p className="mb-8">你打敗了考卷魔王！</p>
+                        <div className="flex gap-4 mb-8">
+                            {STARTERS.map(s => <div key={s.id} className="w-16 h-16 animate-bounce"><StarterSprite id={s.id} /></div>)}
+                        </div>
+                        <div className="bg-white/20 p-6 rounded-xl mb-8">
+                            <p className="text-xl">總正確題數：{playerData.stats.correctAnswers}</p>
+                            <p className="text-sm opacity-75 mt-2">學者之路才剛開始...</p>
+                        </div>
+                        <button onClick={() => { localStorage.removeItem('scholarMonSave_v18'); window.location.reload(); }} className="bg-red-500 px-6 py-3 rounded text-white shadow-lg">重新開始</button>
+                    </div>
+                );
+            }
+
+            if (gameState === 'GAME_OVER') {
+                return (
+                    <div className="h-screen flex flex-col items-center justify-center bg-gray-900 text-white text-center">
+                        <h1 className="text-4xl mb-4 text-red-500 font-bold">不及格...</h1>
+                        <div className="text-6xl mb-8 grayscale opacity-50"><StarterSprite id={playerData.starterId} /></div>
+                        <button onClick={() => { setPlayerData(prev => ({ ...prev, hp: prev.maxHp })); setGameState('MAP'); setPlayerPos({x:1, y:1}); }} className="bg-white text-black px-6 py-3 rounded shadow-lg border-b-4 border-gray-400 active:translate-y-1">補考 (復活)</button>
+                    </div>
+                );
+            }
+
+            return null;
+        }
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>
