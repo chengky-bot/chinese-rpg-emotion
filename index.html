@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>學園寶可夢：暢行無阻版 (Ver 18.15)</title>
+    <title>學園寶可夢：數值覺醒版 (Ver 18.17)</title>
     
     <script src="https://cdn.tailwindcss.com"></script>
     <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
@@ -142,7 +142,7 @@
         };
         const TYPE_ADVANTAGE = { 'math': 'sci', 'sci': 'lit', 'lit': 'math' };
 
-        // --- 全新語文題庫 ---
+        // --- 語文題庫 ---
         const CHINESE_WORDS = ['暴躁', '融洽', '儀態', '冷靜', '一聲不響', '興致'];
         const CHINESE_QUESTIONS = [
             { q: "班上的同學相處______，十分友愛。", a: "融洽" },
@@ -156,25 +156,22 @@
             { q: "幾個男孩在烈日下______勃勃地踢球。", a: "興致" }
         ];
 
-        // --- 核心邏輯：題目生成 ---
+        // --- 題目生成 ---
         const generateQuestion = (stage) => {
             const item = CHINESE_QUESTIONS[Math.floor(Math.random() * CHINESE_QUESTIONS.length)];
             
-            // 第三關及以上：供詞填充 (Text Input)
             if (stage >= 3) {
                 return {
                     q: item.q,
-                    type: 'input', // 新增輸入類型
+                    type: 'input', 
                     correctVal: item.a,
-                    options: [] // 不需要選項
+                    options: [] 
                 };
             }
 
-            // 第一關 3選1，第二關 4選1
             const numOptions = stage === 1 ? 3 : 4;
             let options = [item.a];
             
-            // 隨機填充錯誤選項
             let safety = 0;
             while (options.length < numOptions && safety < 50) {
                 safety++;
@@ -183,7 +180,6 @@
                     options.push(wrong);
                 }
             }
-            // Shuffle options
             options = options.sort(() => Math.random() - 0.5);
             
             return {
@@ -195,30 +191,30 @@
             };
         };
 
+        // --- 角色與怪物資料 ---
         const STARTERS = [
-            { id: 'lit', name: '墨點點', type: 'lit', color: COLORS.lit, desc: '語文系', skill: '萬言書', skillDesc: '傷害+吸血', passive: '博學' },
-            { id: 'math', name: '三角獸', type: 'math', color: COLORS.math, desc: '數學系', skill: '絕對解', skillDesc: '超大傷害', passive: '精算' },
-            { id: 'sci', name: '燒杯怪', type: 'sci', color: COLORS.sci, desc: '科學系', skill: '元素崩壞', skillDesc: '傷害+麻痺', passive: '中和' },
+            { id: 'lit', name: '墨香子', type: 'lit', color: COLORS.lit, desc: '語文系', skill: '妙筆生花', skillDesc: '傷害+吸血', passive: '博學' },
+            { id: 'math', name: '平仄獸', type: 'math', color: COLORS.math, desc: '數學系', skill: '起承轉合', skillDesc: '超大傷害', passive: '格律' },
+            { id: 'sci', name: '煉字妖', type: 'sci', color: COLORS.sci, desc: '科學系', skill: '點鐵成金', skillDesc: '傷害+麻痺', passive: '推敲' },
         ];
 
         const MONSTERS = [
-            { id: 'slime', name: '加法史萊姆', type: 'math', hpBase: 15, exp: 20, minLv: 1, color: COLORS.math },
-            { id: 'bug', name: '標點蟲', type: 'lit', hpBase: 12, exp: 25, minLv: 1, color: COLORS.lit },
-            { id: 'tube', name: '試管怪', type: 'sci', hpBase: 18, exp: 30, minLv: 1, color: COLORS.sci },
-            { id: 'ruler', name: '三角板怪', type: 'math', hpBase: 28, exp: 45, minLv: 3, color: COLORS.math },
-            { id: 'book', name: '字典怪', type: 'lit', hpBase: 25, exp: 50, minLv: 3, color: COLORS.lit },
-            { id: 'planet', name: '行星怪', type: 'sci', hpBase: 30, exp: 55, minLv: 3, color: COLORS.sci },
-            { id: 'xman', name: '代數怪', type: 'math', hpBase: 38, exp: 70, minLv: 5, color: COLORS.math },
-            { id: 'quill', name: '羽毛筆爵士', type: 'lit', hpBase: 35, exp: 75, minLv: 5, color: COLORS.lit },
-            { id: 'volt', name: '雷電球', type: 'sci', hpBase: 42, exp: 80, minLv: 5, color: COLORS.sci },
-            { id: 'sigma', name: '總和機器人', type: 'math', hpBase: 55, exp: 100, minLv: 7, color: COLORS.math },
-            { id: 'inksquid', name: '墨水烏賊', type: 'lit', hpBase: 50, exp: 105, minLv: 7, color: COLORS.lit },
-            { id: 'atom', name: '原子怪', type: 'sci', hpBase: 60, exp: 110, minLv: 7, color: COLORS.sci },
+            { id: 'slime', name: '錯別字黏怪', type: 'math', hpBase: 15, exp: 20, minLv: 1, color: COLORS.math },
+            { id: 'bug', name: '句讀蟲', type: 'lit', hpBase: 12, exp: 25, minLv: 1, color: COLORS.lit },
+            { id: 'tube', name: '典故精', type: 'sci', hpBase: 18, exp: 30, minLv: 1, color: COLORS.sci },
+            { id: 'ruler', name: '戒尺煞', type: 'math', hpBase: 28, exp: 45, minLv: 3, color: COLORS.math },
+            { id: 'book', name: '經書怪', type: 'lit', hpBase: 25, exp: 50, minLv: 3, color: COLORS.lit },
+            { id: 'planet', name: '文曲星', type: 'sci', hpBase: 30, exp: 55, minLv: 3, color: COLORS.sci },
+            { id: 'xman', name: '之乎者也', type: 'math', hpBase: 38, exp: 70, minLv: 5, color: COLORS.math },
+            { id: 'quill', name: '狼毫筆仙', type: 'lit', hpBase: 35, exp: 75, minLv: 5, color: COLORS.lit },
+            { id: 'volt', name: '靈感閃電', type: 'sci', hpBase: 42, exp: 80, minLv: 5, color: COLORS.sci },
+            { id: 'sigma', name: '對仗機', type: 'math', hpBase: 55, exp: 100, minLv: 7, color: COLORS.math },
+            { id: 'inksquid', name: '墨池精', type: 'lit', hpBase: 50, exp: 105, minLv: 7, color: COLORS.lit },
+            { id: 'atom', name: '部首小鬼', type: 'sci', hpBase: 60, exp: 110, minLv: 7, color: COLORS.sci },
         ];
 
-        const BOSS = { id: 'exam_demon', name: '考卷魔王', type: 'math', hpBase: 150, exp: 500, color: COLORS.red, isBoss: true };
+        const BOSS = { id: 'exam_demon', name: '八股文魔', type: 'math', hpBase: 150, exp: 500, color: COLORS.red, isBoss: true };
 
-        // 移除所有 3 (Desk) 和 4 (Chair)，保留 5 (Chest)
         const LEVEL_MAPS = {
             1: [ [1,1,1,1,1,1,1,1,1,1], [1,0,0,0,0,0,0,0,0,1], [1,0,5,0,0,0,0,0,0,1], [1,0,0,0,0,0,0,0,0,1], [1,0,0,0,0,0,0,0,5,1], [1,0,0,0,0,0,0,0,0,1], [1,1,1,1,1,0,0,2,1,1], [1,1,1,1,1,1,1,1,1,1] ],
             2: [ [1,1,1,1,1,1,1,1,1,1], [1,9,0,0,1,5,0,0,2,1], [1,1,1,0,1,0,1,1,1,1], [1,0,0,0,0,0,0,0,0,1], [1,0,1,1,1,1,1,0,0,1], [1,0,0,0,0,0,0,0,5,1], [1,0,1,1,0,1,1,1,0,1], [1,1,1,1,1,1,1,1,1,1] ],
@@ -242,7 +238,8 @@
         const StickerSprite = () => ( <svg viewBox="0 0 16 16" width="16" height="16"><circle cx="8" cy="8" r="6" fill="#f1c40f" stroke="black" strokeWidth="1"/><text x="8" y="11" fontSize="8" textAnchor="middle" fill="black">★</text></svg> );
         const PlayerSprite = () => ( <svg viewBox="0 0 16 16" shapeRendering="crispEdges" className="w-full h-full"><rect x="4" y="14" width="8" height="2" fill="rgba(0,0,0,0.3)" /><rect x="5" y="12" width="2" height="3" fill="#2d3436" /><rect x="9" y="12" width="2" height="3" fill="#2d3436" /><rect x="4" y="14" width="3" height="1" fill="#95a5a6" /><rect x="9" y="14" width="3" height="1" fill="#95a5a6" /><rect x="4" y="8" width="8" height="4" fill="#3498db" /><rect x="7" y="8" width="2" height="2" fill="white" /><rect x="7" y="9" width="2" height="1" fill="#e74c3c" /><rect x="3" y="8" width="1" height="3" fill="#2980b9" /><rect x="12" y="8" width="1" height="3" fill="#2980b9" /><rect x="3" y="11" width="1" height="1" fill="#ffeaa7" /><rect x="12" y="11" width="1" height="1" fill="#ffeaa7" /><rect x="4" y="3" width="8" height="5" fill="#ffeaa7" /><rect x="5" y="5" width="2" height="2" fill="#2d3436" /><rect x="9" y="5" width="2" height="2" fill="#2d3436" /><rect x="6" y="5" width="1" height="1" fill="white" /><rect x="10" y="5" width="1" height="1" fill="white" /><path d="M4,2 h8 v2 h-8 z" fill="#e74c3c" /><path d="M5,1 h6 v1 h-6 z" fill="#c0392b" /><rect x="3" y="3" width="10" height="1" fill="#e74c3c" /><rect x="5" y="8" width="1" height="4" fill="#e17055" /><rect x="10" y="8" width="1" height="4" fill="#e17055" /></svg> );
         const StarterSprite = ({ id, hit }) => { const className = hit ? "hit-flash" : "animate-bounce"; if (id === 'math') return ( <svg viewBox="0 0 32 32" className={className}><path d="M16,4 L4,26 L28,26 Z" fill={COLORS.math} stroke="black" strokeWidth="1" /><circle cx="16" cy="18" r="3" fill={COLORS.red} /><circle cx="16" cy="18" r="1" fill="white" /></svg> ); if (id === 'lit') return ( <svg viewBox="0 0 32 32" className={className}><path d="M10,20 Q6,20 6,14 Q6,8 16,6 Q26,8 26,14 Q26,20 22,20 L24,24 L16,28 L8,24 Z" fill={COLORS.lit} /><circle cx="12" cy="14" r="2" fill="white" /> <circle cx="20" cy="14" r="2" fill="white" /></svg> ); if (id === 'sci') return ( <svg viewBox="0 0 32 32" className={className}><path d="M8,8 L8,26 Q8,30 16,30 Q24,30 24,26 L24,8" fill="none" stroke="#a29bfe" strokeWidth="2" /><path d="M9,16 Q16,14 23,16 L23,26 Q23,29 16,29 Q9,29 9,26 Z" fill={COLORS.sci} opacity="0.8" /><rect x="11" y="18" width="2" height="4" fill="black" /> <rect x="19" y="18" width="2" height="4" fill="black" /></svg> ); return null; };
-        // 視覺優化：開啟的寶箱半透明
+        const DeskSprite = () => ( <svg viewBox="0 0 16 16" className="w-full h-full"><rect x="2" y="6" width="12" height="8" fill="#a0522d" stroke="black" strokeWidth="0.5"/><rect x="3" y="7" width="10" height="6" fill="#cd853f"/><rect x="2" y="6" width="1" height="8" fill="#8b4513"/><rect x="13" y="6" width="1" height="8" fill="#8b4513"/></svg> );
+        const ChairSprite = () => ( <svg viewBox="0 0 16 16" className="w-full h-full"><rect x="4" y="8" width="8" height="6" fill="#8b4513" stroke="black" strokeWidth="0.5"/><rect x="4" y="4" width="8" height="2" fill="#a0522d" stroke="black" strokeWidth="0.5"/><rect x="4" y="4" width="1" height="10" fill="black"/><rect x="11" y="4" width="1" height="10" fill="black"/></svg> );
         const ChestSprite = ({ open }) => ( <svg viewBox="0 0 16 16" width="100%" height="100%" style={{opacity: open ? 0.5 : 1}}><rect x="2" y="5" width="12" height="9" rx="1" fill={open ? "#8d6e63" : "#ffc107"} stroke="black" strokeWidth="1"/><path d="M2,8 L14,8" stroke="black" strokeWidth="1"/><rect x="7" y="7" width="2" height="2" fill={open ? "black" : "#ff5722"} stroke="black" strokeWidth="0.5"/><circle cx="8" cy="8" r="0.5" fill="black" />{open && <path d="M2,5 L14,5 L12,2 L4,2 Z" fill="#6d4c41" stroke="black" strokeWidth="1" />} </svg> );
 
         const MonsterSprite = ({ id, type, hit }) => { 
@@ -272,7 +269,7 @@
             return null;
         };
 
-        const DashboardModal = ({ onClose, stats, level, caughtCount }) => (
+        const DashboardModal = ({ onClose, stats, level, caughtCount, maxHp, baseAtk }) => (
             <div className="absolute inset-0 bg-black/90 z-50 flex items-center justify-center p-4">
                 <div className="bg-white text-black p-6 rounded-lg border-4 border-blue-500 w-full max-w-sm text-center font-sans relative" style={{fontFamily: "'Press Start 2P', cursive"}}>
                     <h2 className="text-xl mb-6 text-blue-600 font-bold">📊 學習儀表板</h2>
@@ -294,6 +291,16 @@
                                     : 0}%
                             </div>
                         </div>
+                        
+                        {/* New Stats Section */}
+                        <div className="bg-red-50 p-3 rounded border border-red-200 col-span-2">
+                            <div className="text-gray-500 mb-1">戰鬥數值</div>
+                            <div className="flex justify-around">
+                                <div>❤️ HP: {maxHp}</div>
+                                <div>⚔️ ATK: {baseAtk||0} <span className="text-xs text-gray-400">(+{Math.floor(level*10)}%)</span></div>
+                            </div>
+                        </div>
+
                         <div className="bg-yellow-50 p-3 rounded border border-yellow-200">
                             <div className="text-gray-500 mb-1">目前等級</div>
                             <div className="text-lg">Lv.{level}</div>
@@ -827,11 +834,13 @@
                 let nextLevel = playerData.level;
                 let nextExp = playerData.exp + expGain;
                 let levelUp = false;
+                let levelsGained = 0;
 
                 while (nextExp >= nextLevel * 100) {
                     nextExp = nextExp - (nextLevel * 100);
                     nextLevel++;
                     levelUp = true;
+                    levelsGained++;
                 }
 
                 const currentDefeated = (playerData.stats?.defeatedCount || 0) + 1;
@@ -842,13 +851,16 @@
 
                 const newMoney = playerData.money + moneyGain;
                 const newMaxHp = 20 + (nextLevel * 5);
+                // Base Atk increases by levels gained
+                const newBaseAtk = (playerData.baseAtk || 0) + levelsGained;
                 
-                let newHp = newMaxHp; // 自動回滿血
+                let newHp = newMaxHp; // Auto full heal
 
                 addLog(`勝利！獲得 ${expGain} 經驗, $${moneyGain}`);
                 
                 if (levelUp) {
-                    addLog(`升級了！ Lv.${nextLevel}`);
+                    addLog(`升級！Lv.${nextLevel} (HP+${levelsGained*5}, 攻+${levelsGained})`);
+                    SFX.HEAL();
                 } else {
                     addLog("戰鬥勝利！HP已完全恢復！");
                 }
@@ -860,6 +872,7 @@
                     money: newMoney,
                     maxHp: newMaxHp,
                     hp: newHp,
+                    baseAtk: newBaseAtk,
                     stats: newStats
                 };
                 
@@ -882,7 +895,7 @@
                         <div className="bg-stripes absolute inset-0 opacity-20"></div>
                         <div className="z-10 text-center space-y-8 animate-bounce">
                             <h1 className="text-4xl md:text-6xl text-yellow-400 drop-shadow-lg tracking-widest" style={{textShadow: '4px 4px 0 #000'}}>學園寶可夢</h1>
-                            <p className="text-white text-xl">ScholarMon Ver 18.14 (語文版)</p>
+                            <p className="text-white text-xl">ScholarMon Ver 18.17 (數值覺醒)</p>
                         </div>
                         
                         <div className="z-10 mt-12 bg-gray-800 p-6 rounded-xl border-4 border-white shadow-2xl w-80">
@@ -949,6 +962,8 @@
                                 stats={playerData.stats} 
                                 level={playerData.level}
                                 caughtCount={playerData.caught.length}
+                                maxHp={playerData.maxHp}
+                                baseAtk={playerData.baseAtk}
                                 onClose={() => setShowDashboard(false)} 
                             />
                         )}
